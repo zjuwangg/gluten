@@ -425,8 +425,6 @@ case class VeloxHashAggregateExecTransformer(
     resRel
   }
 
-  override def isStreaming: Boolean = false
-
   def numShufflePartitions: Option[Int] = Some(0)
 
   override protected def withNewChildInternal(newChild: SparkPlan)
