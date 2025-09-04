@@ -16,20 +16,22 @@
  */
 package org.apache.spark.shuffle.sort
 
+import org.apache.gluten.backendsapi.BackendsApiManager
+import org.apache.gluten.config.{GlutenConfig, HashShuffleWriterType, ShuffleWriterType, SortShuffleWriterType}
 import org.apache.gluten.shuffle.SupportsColumnarShuffle
-
 import org.apache.spark.{ShuffleDependency, SparkConf, SparkEnv, TaskContext}
 import org.apache.spark.internal.Logging
 import org.apache.spark.serializer.SerializerManager
 import org.apache.spark.shuffle._
 import org.apache.spark.shuffle.api.ShuffleExecutorComponents
 import org.apache.spark.shuffle.sort.SortShuffleManager.canUseBatchFetch
+import org.apache.spark.sql.catalyst.expressions.Attribute
+import org.apache.spark.sql.catalyst.plans.physical.{Partitioning, SinglePartition}
 import org.apache.spark.storage.BlockId
 import org.apache.spark.util.collection.OpenHashSet
 
 import java.io.InputStream
 import java.util.concurrent.ConcurrentHashMap
-
 import scala.collection.JavaConverters._
 
 class ColumnarShuffleManager(conf: SparkConf)
@@ -177,6 +179,24 @@ class ColumnarShuffleManager(conf: SparkConf)
   /** Shut down this ShuffleManager. */
   override def stop(): Unit = {
     shuffleBlockResolver.stop()
+  }
+
+  /** Determine whether to use sort-based shuffle based on shuffle partitioning and output. */
+  override def getShuffleWriterType(partitioning: Partitioning, conf: GlutenConfig, output: Seq[Attribute]): ShuffleWriterType = {
+    // here we hard code velox since we don't have dependency of velox module
+    if (BackendsApiManager.getBackendName.equals("velox")) {
+      if (
+        partitioning != SinglePartition &&
+          (partitioning.numPartitions >= GlutenConfig.get.columnarShuffleSortPartitionsThreshold ||
+            output.size >= GlutenConfig.get.columnarShuffleSortColumnsThreshold)
+      ) {
+        SortShuffleWriterType
+      } else {
+        HashShuffleWriterType
+      }
+    } else {
+      super.getShuffleWriterType(partitioning, conf, output)
+    }
   }
 }
 

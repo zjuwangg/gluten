@@ -23,7 +23,7 @@ import org.apache.gluten.execution._
 import org.apache.gluten.expression._
 import org.apache.gluten.expression.aggregate.{HLLAdapter, VeloxBloomFilterAggregate, VeloxCollectList, VeloxCollectSet}
 import org.apache.gluten.extension.columnar.FallbackTags
-import org.apache.gluten.shuffle.{NeedCustomColumnarBatchSerializer, NeedCustomShuffleWriterType}
+import org.apache.gluten.shuffle.{NeedCustomColumnarBatchSerializer, SupportsColumnarShuffle}
 import org.apache.gluten.sql.shims.SparkShimLoader
 import org.apache.gluten.vectorized.{ColumnarBatchSerializer, ColumnarBatchSerializeResult}
 
@@ -554,8 +554,8 @@ class VeloxSparkPlanExecApi extends SparkPlanExecApi {
       output: Seq[Attribute]): ShuffleWriterType = {
     val conf = GlutenConfig.get
     SparkEnv.get.shuffleManager match {
-      case shuffleManager: NeedCustomShuffleWriterType =>
-        shuffleManager.customShuffleWriterType(partitioning, conf)
+      case shuffleManager: SupportsColumnarShuffle =>
+        shuffleManager.getShuffleWriterType(partitioning, conf, output)
       case _ =>
         if (
           partitioning != SinglePartition &&

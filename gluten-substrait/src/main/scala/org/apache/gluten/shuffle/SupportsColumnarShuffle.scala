@@ -16,16 +16,22 @@
  */
 package org.apache.gluten.shuffle
 
-import org.apache.gluten.config.{GlutenConfig, ShuffleWriterType}
+import org.apache.gluten.config.{GlutenConfig, HashShuffleWriterType, ShuffleWriterType}
 
+import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.catalyst.plans.physical.Partitioning
 
-trait SupportsColumnarShuffle
+trait SupportsColumnarShuffle {
+
+  /** Determine whether to use sort-based shuffle based on shuffle partitioning and output. */
+  def getShuffleWriterType(
+      partitioning: Partitioning,
+      conf: GlutenConfig,
+      output: Seq[Attribute]): ShuffleWriterType = {
+    HashShuffleWriterType
+  }
+}
 
 trait NeedCustomColumnarBatchSerializer {
   def columnarBatchSerializerClass(): String
-}
-
-trait NeedCustomShuffleWriterType {
-  def customShuffleWriterType(partitioning: Partitioning, conf: GlutenConfig): ShuffleWriterType
 }

@@ -20,8 +20,8 @@ import org.apache.gluten.backendsapi.BackendsApiManager;
 import org.apache.gluten.config.*;
 import org.apache.gluten.exception.GlutenException;
 import org.apache.gluten.shuffle.NeedCustomColumnarBatchSerializer;
-import org.apache.gluten.shuffle.NeedCustomShuffleWriterType;
 import org.apache.gluten.shuffle.SupportsColumnarShuffle;
+import org.apache.gluten.shuffle.SupportsColumnarShuffle$class;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterators;
@@ -32,6 +32,7 @@ import org.apache.spark.*;
 import org.apache.spark.shuffle.*;
 import org.apache.spark.shuffle.celeborn.*;
 import org.apache.spark.shuffle.sort.ColumnarShuffleManager;
+import org.apache.spark.sql.catalyst.expressions.Attribute;
 import org.apache.spark.sql.catalyst.plans.physical.Partitioning;
 import org.apache.spark.sql.catalyst.plans.physical.SinglePartition$;
 import org.slf4j.Logger;
@@ -46,11 +47,10 @@ import java.util.ServiceLoader;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+import scala.collection.immutable.Seq;
+
 public class CelebornShuffleManager
-    implements ShuffleManager,
-        SupportsColumnarShuffle,
-        NeedCustomColumnarBatchSerializer,
-        NeedCustomShuffleWriterType {
+    implements ShuffleManager, SupportsColumnarShuffle, NeedCustomColumnarBatchSerializer {
 
   private static final Logger logger = LoggerFactory.getLogger(CelebornShuffleManager.class);
 
@@ -448,18 +448,24 @@ public class CelebornShuffleManager
   }
 
   @Override
-  public ShuffleWriterType customShuffleWriterType(Partitioning partitioning, GlutenConfig conf) {
-    if (conf.celebornShuffleWriterType().equals(ReservedKeys.GLUTEN_SORT_SHUFFLE_WRITER())) {
-      if (conf.useCelebornRssSort()) {
-        return RssSortShuffleWriterType$.MODULE$;
-      } else if (partitioning != SinglePartition$.MODULE$) {
-        return SortShuffleWriterType$.MODULE$;
+  public ShuffleWriterType getShuffleWriterType(
+      Partitioning partitioning, GlutenConfig conf, Seq<Attribute> output) {
+    // here we hard code velox since we don't have dependency of velox module
+    if (BackendsApiManager.getBackendName().equals("velox")) {
+      if (conf.celebornShuffleWriterType().equals(ReservedKeys.GLUTEN_SORT_SHUFFLE_WRITER())) {
+        if (conf.useCelebornRssSort()) {
+          return RssSortShuffleWriterType$.MODULE$;
+        } else if (partitioning != SinglePartition$.MODULE$) {
+          return SortShuffleWriterType$.MODULE$;
+        } else {
+          // If not using rss sort, we still use hash shuffle writer for single partitioning.
+          return HashShuffleWriterType$.MODULE$;
+        }
       } else {
-        // If not using rss sort, we still use hash shuffle writer for single partitioning.
         return HashShuffleWriterType$.MODULE$;
       }
     } else {
-      return HashShuffleWriterType$.MODULE$;
+      return SupportsColumnarShuffle$class.getShuffleWriterType(this, partitioning, conf, output);
     }
   }
 
